@@ -5,6 +5,11 @@ const path = require('path');
 const app = express();
 const port = 5000;
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 app.set('json spaces', 2);
 
 // Body parser

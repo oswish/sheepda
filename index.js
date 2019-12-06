@@ -1,9 +1,27 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+const jsdom = require("jsdom");
 
 const app = express();
 const port = 5000;
+const { JSDOM } = jsdom;
+
+function querySelectorMatchAll(dom, key) {
+  const patt = new RegExp(`[a-z,0-9]*[_,-]*[a-z]*[_,-]*${key}[_,-]*[a-z]*`, 'g');
+  return dom.querySelectorAll(`.${dom.innerHTML.match(patt).reduce((items, className) => {
+    if (items.indexOf(className) === -1) {
+      if (dom.querySelector(`.${className}`)) {
+        items.push(className);
+      }
+    }
+    return items;
+  }, []).shift()}`)
+}
+
+function querySelectorMatch(dom, key) {
+  return querySelectorMatchAll.apply(dom, arguments)[0];
+}
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -26,6 +44,14 @@ app.get('/pm', (req, res) => {
       (r) => {
         r.text()
           .then((data) => {
+            const { document } = (new JSDOM(data)).window;
+
+            [...querySelectorMatchAll(document.body,'events')].forEach(d => {
+              console.log(
+                `${querySelectorMatch(d, 'date').textContent}: ${querySelectorMatch(d, 'details').textContent}`
+              )
+            })
+
             const title = data.split('</h1>').shift().split('>').pop();
             const cta = data.split(title).pop().split('</p>').shift().split('>').pop();
             const url = data.split(cta).pop().split('</a>').shift().split('href="').pop().split('"').shift();

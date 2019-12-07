@@ -7,6 +7,7 @@ const app = express();
 const port = 5000;
 const { JSDOM } = jsdom;
 
+/*
 function querySelectorMatchAll(dom, key) {
   const patt = new RegExp(`[a-z,0-9]*[_,-]*[a-z]*[_,-]*${key}[_,-]*[a-z]*`, 'g');
   return dom.querySelectorAll(`.${dom.innerHTML.match(patt).reduce((items, className) => {
@@ -18,6 +19,20 @@ function querySelectorMatchAll(dom, key) {
     return items;
   }, []).shift()}`)
 }
+*/
+
+function querySelectorMatchAll(dom, key, index) {
+  const patt = new RegExp(`[a-z,0-9]*[_,-]*${key}[_,-]*[a-z]*`, 'g');
+  return dom.querySelectorAll(`.${dom.innerHTML.match(patt).reduce((items, className) => {
+    if (items.indexOf(className) === -1) {
+      if (dom.querySelector(`.${className}`)) {
+        items.push(className);
+      }
+    }
+    return items;
+  }, [])[index || 0]}`)
+}
+
 
 function querySelectorMatch(dom, key) {
   return querySelectorMatchAll.apply(dom, arguments)[0];
@@ -39,18 +54,70 @@ app.get('/', (req, res) => {
 });
 
 app.get('/pm', (req, res) => {
-  fetch('https://www.getpostman.com/')
+  const host = 'https://www.getpostman.com';
+
+  fetch(host)
     .then(
       (r) => {
         r.text()
           .then((data) => {
             const { document } = (new JSDOM(data)).window;
 
-            [...querySelectorMatchAll(document.body,'events')].forEach(d => {
-              console.log(
-                `${querySelectorMatch(d, 'date').textContent}: ${querySelectorMatch(d, 'details').textContent}`
-              )
-            })
+            const getEvents = () => {
+              const events = {
+                type: 'event',
+                items: []
+              };
+
+              [...querySelectorMatchAll(document.body, 'events')].forEach(d => {
+                events.items.push({date: d.textContent});
+              });
+
+              [...querySelectorMatchAll(document.body, 'events', 1)].forEach((d, i) => {
+                events.items[i].details = d.textContent;
+              });
+
+              return events;
+            };
+
+            const getCards = () => {
+              const cards = {
+                type: 'card',
+                items: []
+              };
+
+              [...querySelectorMatchAll(document.body, 'card')].forEach((d, i) => {
+                const text = d.textContent;
+                const hasQuote = text.indexOf('\"') !== -1;
+
+                let dom;
+                
+                cards.items.push({__: text});                
+
+                // URL
+                dom = d.querySelector('[href*="/"]');
+
+                if (dom) {
+                  const href = d.querySelector('[href*="/"]').href;
+                  const url = href.indexOf('http') === -1 && `${host}${href}` || href;
+
+                  cards.items[i].url = url;
+                }
+
+                // Quote
+                if (hasQuote) {
+                  const head = text.split('"').shift();                  
+                  cards.items[i].quote = text.split(`${head}"`).pop().split('"').shift();
+                }
+
+                // subType:caseStudy
+                if (hasQuote && cards.items[i].url && cards.items[i].url.indexOf('.pdf') !== -1) {
+                  cards.items[i].subType = 'caseStudy';
+                }
+              });
+
+              return cards;
+            };
 
             const title = data.split('</h1>').shift().split('>').pop();
             const cta = data.split(title).pop().split('</p>').shift().split('>').pop();
@@ -106,7 +173,8 @@ app.get('/pm', (req, res) => {
               url,
               hero,
               stats,
-              describe
+              describe,
+              data: [getEvents(), getCards()]
             });
           });
       }
